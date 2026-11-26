@@ -25,13 +25,12 @@ jobs:
           gradle-version: '8.9'
 
       - name: Ekstrak source project
-        run: |
-          unzip BiruFinance_Source.zip -d project
-          ls -la project
+  run: |
+    unzip -o BiruFinance_3.0_LiquidGlass_Source.zip -d project
+    ls -la project/BiruFinance_Ultimate
 
-      - name: Build APK
-        working-directory: project
-        run: gradle --no-daemon assembleDebug
+- name: Build APK
+  run: gradle --no-daemon -p project/BiruFinance_Ultimate assembleDebug
 
       - name: Simpan APK
         uses: actions/upload-artifact@v4
