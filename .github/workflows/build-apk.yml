@@ -21,14 +21,25 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # GitHub's ubuntu-latest image already contains Android SDK.
-      # Avoid android-actions/setup-android@v3, which is failing while
-      # trying to resolve the obsolete SDK package named "tools".
-      - name: Install Android SDK packages
+      - name: Locate and install Android SDK packages
+        shell: bash
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --sdk_root="$ANDROID_HOME" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses || true
+          set -euo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK_ROOT" ] || [ ! -d "$SDK_ROOT" ]; then
+            echo "Android SDK directory not found on runner."
+            exit 1
+          fi
+          SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager -perm -111 2>/dev/null | head -n 1 || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "sdkmanager was not found under $SDK_ROOT"
+            find "$SDK_ROOT" -maxdepth 4 -type d -print || true
+            exit 1
+          fi
+          echo "Using sdkmanager: $SDKMANAGER"
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
