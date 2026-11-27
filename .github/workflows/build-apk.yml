@@ -25,7 +25,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           if [ -z "$SDK_ROOT" ] || [ ! -d "$SDK_ROOT" ]; then
             echo "Android SDK directory not found on runner."
@@ -34,7 +33,6 @@ jobs:
           SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager -perm -111 2>/dev/null | head -n 1 || true)"
           if [ -z "$SDKMANAGER" ]; then
             echo "sdkmanager was not found under $SDK_ROOT"
-            find "$SDK_ROOT" -maxdepth 4 -type d -print || true
             exit 1
           fi
           echo "Using sdkmanager: $SDKMANAGER"
@@ -46,18 +44,32 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Verify project files
+      - name: Locate project root and verify files
+        id: project
+        shell: bash
         run: |
-          test -f settings.gradle
-          test -f app/src/main/assets/index.html
-          test -f app/src/main/java/com/birufinance/app/MainActivity.java
+          set -euo pipefail
+          ROOT="$(find . -type f -name settings.gradle -not -path './.git/*' -print -quit | xargs -r dirname)"
+          if [ -z "$ROOT" ]; then
+            echo "settings.gradle was not found anywhere in the checked-out files."
+            find . -maxdepth 4 -type f | head -200
+            exit 1
+          fi
+          echo "Project root: $ROOT"
+          test -f "$ROOT/app/src/main/assets/index.html"
+          test -f "$ROOT/app/src/main/java/com/birufinance/app/MainActivity.java"
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
 
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${{ steps.project.outputs.root }}"
+          gradle --no-daemon assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BiruFinance-4.0.0-Offline-debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.project.outputs.root }}/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
